@@ -185,5 +185,8 @@ class <%= controller_name.classify %>Controller < ApplicationController
     # Configuration for autocomplete suggestor
     config.autocomplete_enabled = true
     config.autocomplete_path = 'suggest'
+
+    # Uncomment to disable turbolinks on view controls
+    # config.use_turbolinks_for_view_controls = false
   end
 end

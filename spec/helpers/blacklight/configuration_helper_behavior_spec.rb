@@ -15,6 +15,18 @@ RSpec.describe Blacklight::ConfigurationHelperBehavior do
     end
   end
 
+  describe '#use_turbolinks_for_view_controls?' do
+    it 'returns configured value' do
+      allow(blacklight_config).to receive_messages(use_turbolinks_for_view_controls: config_value)
+      expect(helper.use_turbolinks_for_view_controls?).to eq config_value
+    end
+
+    it 'returns true if not configured' do
+      allow(blacklight_config).to receive_messages(use_turbolinks_for_view_controls: nil)
+      expect(helper.use_turbolinks_for_view_controls?).to be_truthy
+    end
+  end
+
   describe "#active_sort_fields" do
     it "restricts the configured sort fields to only those that should be displayed" do
       allow(blacklight_config).to receive_messages(sort_fields: { a: double(if: false, unless: false), b: double(if:true, unless: true) })

@@ -9,6 +9,13 @@ module Blacklight::ConfigurationHelperBehavior
     blacklight_config.index_fields
   end
 
+  ##
+  # Disable turbolinks for view controls if configured as such
+  def use_turbolinks_for_view_controls?
+    return true if blacklight_config.use_turbolinks_for_view_controls.nil?
+    blacklight_config.use_turbolinks_for_view_controls
+  end
+
   def active_sort_fields
     blacklight_config.sort_fields.select { |_sort_key, field_config| should_render_field?(field_config) }
   end
