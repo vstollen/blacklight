@@ -20,6 +20,15 @@ module Blacklight
           //= require turbolinks
         CONTENT
       end
+
+      append_to_file 'app/assets/config/manifest.js', "\n//= link application.js"
+    end
+
+    ##
+    # Remove the empty generated app/assets/images directory. Without doing this,
+    # the default Sprockets manifest will raise an exception.
+    def appease_sprockets
+      empty_directory 'app/assets/images'
     end
 
     def assets
