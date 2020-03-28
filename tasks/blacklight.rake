@@ -41,7 +41,9 @@ namespace :blacklight do
 
   namespace :internal do
     desc 'Index seed data in test ap'
-    task seed: ['engine_cart:generate'] do
+    task :seed do
+      Rake::Task['engine_cart:generate'].invoke unless File.exist?(EngineCart.destination)
+
       within_test_app do
         system "bin/rake blacklight:index:seed"
       end
