@@ -5,32 +5,40 @@ module Blacklight::ConfigurationHelperBehavior
   ##
   # Index fields to display for a type of document
   #
-  # @param [SolrDocument] document
+  # @param [SolrDocument] _document
   # @return [Array<Blacklight::Configuration::Field>]
   def index_fields _document = nil
     Deprecation.warn(self, "index_fields is deprecated and will be removed in Blacklight 8. Use IndexPresenter#fields instead")
     blacklight_config.index_fields
   end
 
+  ##
+  # Return the available sort fields
+  # @return [Array<Blacklight::Configuration::Field>]
   def active_sort_fields
     blacklight_config.sort_fields.select { |_sort_key, field_config| should_render_field?(field_config) }
   end
 
   # Used in the search form partial for building a select tag
+  # @see #search_field_options_for_select
   def search_fields
     search_field_options_for_select
   end
+  deprecation_deprecate search_fields: 'removed without replacement'
 
   # Returns suitable argument to options_for_select method, to create
   # an html select based on #search_field_list. Skips search_fields
   # marked :include_in_simple_select => false
+  # @return [Array<Array>] the first element of the array is the label, the second is the sort field key
   def search_field_options_for_select
     blacklight_config.search_fields.collect do |_key, field_def|
       [label_for_search_field(field_def.key), field_def.key] if should_render_field?(field_def)
     end.compact
   end
+  deprecation_deprecate search_field_options_for_select: 'removed without replacement'
 
   # used in the catalog/_show partial
+  # @return [Array<Blacklight::Configuration::Field>]
   def document_show_fields _document = nil
     Deprecation.warn(self, "document_show_fields is deprecated and will be removed in Blacklight 8. Use ShowPresenter#fields instead")
     blacklight_config.show_fields
@@ -45,19 +53,24 @@ module Blacklight::ConfigurationHelperBehavior
   def constraint_query_label(localized_params = params)
     label_for_search_field(localized_params[:search_field]) unless default_search_field?(localized_params[:search_field])
   end
+  deprecation_deprecate constraint_query_label: 'Moving to Blacklight::ConstraintsComponent'
 
   ##
   # Is the search form using the default search field ("all_fields" by default)?
   # @param [String] selected_search_field the currently selected search_field
   # @return [Boolean]
   def default_search_field?(selected_search_field)
-    selected_search_field.blank? || (default_search_field && selected_search_field == default_search_field[:key])
+    Deprecation.silence(Blacklight::SearchFields) do
+      selected_search_field.blank? || (default_search_field && selected_search_field == default_search_field[:key])
+    end
   end
 
   ##
   # Look up the label for the index field
+  # @deprecated
+  # @return [String]
   def index_field_label document, field
-    field_config = blacklight_config.index_fields_for(index_presenter(document).display_type)[field]
+    field_config = blacklight_config.index_fields_for(document_presenter(document).display_type)[field]
     field_config ||= Blacklight::Configuration::NullField.new(key: field)
 
     field_config.display_label('index')
@@ -66,8 +79,10 @@ module Blacklight::ConfigurationHelperBehavior
 
   ##
   # Look up the label for the show field
+  # @deprecated
+  # @return [String]
   def document_show_field_label document, field
-    field_config = blacklight_config.show_fields_for(show_presenter(document).display_type)[field]
+    field_config = blacklight_config.show_fields_for(document_presenter(document).display_type)[field]
     field_config ||= Blacklight::Configuration::NullField.new(key: field)
 
     field_config.display_label('show')
@@ -76,6 +91,7 @@ module Blacklight::ConfigurationHelperBehavior
 
   ##
   # Look up the label for the facet field
+  # @return [String]
   def facet_field_label field
     field_config = blacklight_config.facet_fields[field]
     field_config ||= Blacklight::Configuration::NullField.new(key: field)
@@ -83,19 +99,17 @@ module Blacklight::ConfigurationHelperBehavior
     field_config.display_label('facet')
   end
 
+  # Return the label for a search view
+  # @return [String]
   def view_label view
     view_config = blacklight_config.view[view]
-    field_label(
-      :"blacklight.search.view_title.#{view}",
-      :"blacklight.search.view.#{view}",
-      view_config.label,
-      view_config.title,
-      view.to_s.humanize
-    )
+    view_config.display_label(view)
   end
+  deprecation_deprecate view_label: 'Moving to ViewConfig#display_label and Blacklight::Response::ViewTypeComponent'
 
   # Shortcut for commonly needed operation, look up display
   # label for the key specified.
+  # @return [String]
   def label_for_search_field(key)
     field_config = blacklight_config.search_fields[key]
     return if key.nil? && field_config.nil?
@@ -105,6 +119,7 @@ module Blacklight::ConfigurationHelperBehavior
     field_config.display_label('search')
   end
 
+  # @return [String]
   def sort_field_label(key)
     field_config = blacklight_config.sort_fields[key]
     field_config ||= Blacklight::Configuration::NullField.new(key: key)
@@ -124,12 +139,14 @@ module Blacklight::ConfigurationHelperBehavior
   #     before falling  back to the label
   #   @param [Symbol] any number of additional keys
   #   @param [Symbol] ...
+  # @return [String]
   def field_label *i18n_keys
     first, *rest = i18n_keys.compact
 
     t(first, default: rest)
   end
 
+  # @return [Hash<Symbol => Blacklight::Configuration::ViewConfig>]
   def document_index_views
     blacklight_config.view.select do |_k, config|
       should_render_field? config
@@ -151,17 +168,22 @@ module Blacklight::ConfigurationHelperBehavior
 
   ##
   # Check if there are alternative views configuration
+  # @return [Boolean]
   def has_alternative_views?
     document_index_views.keys.length > 1
   end
+  deprecation_deprecate has_alternative_views?: 'Moving to Blacklight::Response::ViewTypeComponent'
 
   ##
   #  Maximum number of results for spell checking
+  # @return [Number]
   def spell_check_max
     blacklight_config.spell_max
   end
+  deprecation_deprecate spell_check_max: 'Use blacklight_config.spell_max directly'
 
   # Used in the document list partial (search view) for creating a link to the document show action
+  # @deprecated
   def document_show_link_field document = nil
     fields = Array(blacklight_config.view_config(document_index_view_type).title_field)
 
@@ -187,6 +209,8 @@ module Blacklight::ConfigurationHelperBehavior
   ##
   # The available options for results per page, in the style of #options_for_select
   def per_page_options_for_select
+    return [] if blacklight_config.per_page.blank?
+
     blacklight_config.per_page.map do |count|
       [t(:'blacklight.search.per_page.label', count: count).html_safe, count]
     end

@@ -2,6 +2,8 @@
 
 module Blacklight
   class FacetItemComponent < ::ViewComponent::Base
+    extend Deprecation
+
     with_collection_parameter :facet_item
 
     def initialize(facet_item:, wrapping_element: 'li', suppress_link: false)
@@ -55,7 +57,7 @@ module Blacklight
     # @deprecated
     # @private
     def content_from_legacy_view_helper
-      Deprecation.warn('Calling out to the #render_facet_item helper for backwards compatibility.')
+      Deprecation.warn(self.class, 'Calling out to the #render_facet_item helper for backwards compatibility.')
       Deprecation.silence(Blacklight::FacetsHelperBehavior) do
         @view_context.render_facet_item(@facet_item.facet_field, @facet_item.facet_item)
       end
@@ -66,14 +68,10 @@ module Blacklight
     # partial and catalog/facet expanded list. Will output facet value name as
     # a link to add that to your restrictions, with count in parens.
     #
-    # @param [Blacklight::Solr::Response::Facets::FacetField] facet_field
-    # @param [Blacklight::Solr::Response::Facets::FacetItem] item
-    # @param [Hash] options
-    # @option options [Boolean] :suppress_link display the facet, but don't link to it
     # @return [String]
     # @private
     def render_facet_value
-      content_tag(:span, class: "facet-label") do
+      tag.span(class: "facet-label") do
         link_to_unless(@suppress_link, @label, @href, class: "facet-select")
       end + render_facet_count
     end
@@ -81,16 +79,15 @@ module Blacklight
     ##
     # Standard display of a SELECTED facet value (e.g. without a link and with a remove button)
     # @see #render_facet_value
-    # @param [Blacklight::Solr::Response::Facets::FacetField] facet_field
-    # @param [String] item
+    #
     # @private
     def render_selected_facet_value
-      content_tag(:span, class: "facet-label") do
-        content_tag(:span, @label, class: "selected") +
+      tag.span(class: "facet-label") do
+        tag.span(@label, class: "selected") +
           # remove link
           link_to(@href, class: "remove") do
-            content_tag(:span, '✖', class: "remove-icon") +
-              content_tag(:span, '[remove]', class: 'sr-only')
+            tag.span('✖', class: "remove-icon") +
+              tag.span('[remove]', class: 'sr-only')
           end
       end + render_facet_count(classes: ["selected"])
     end
@@ -99,7 +96,6 @@ module Blacklight
     # Renders a count value for facet limits. Can be over-ridden locally
     # to change style. And can be called by plugins to get consistent display.
     #
-    # @param [Integer] num number of facet results
     # @param [Hash] options
     # @option options [Array<String>]  an array of classes to add to count span.
     # @return [String]
@@ -108,7 +104,7 @@ module Blacklight
       return @view_context.render_facet_count(@hits, options) unless @view_context.method(:render_facet_count).owner == Blacklight::FacetsHelperBehavior || explicit_component_configuration?
 
       classes = (options[:classes] || []) << "facet-count"
-      content_tag("span", t('blacklight.search.facets.count', number: number_with_delimiter(@hits)), class: classes)
+      tag.span(t('blacklight.search.facets.count', number: number_with_delimiter(@hits)), class: classes)
     end
 
     private

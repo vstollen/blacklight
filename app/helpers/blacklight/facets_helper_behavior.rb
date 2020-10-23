@@ -8,9 +8,11 @@ module Blacklight::FacetsHelperBehavior
   ##
   # Check if any of the given fields have values
   #
+  # @deprecated
   # @param [Array<String>] fields
   # @return [Boolean]
   def has_facet_values? fields = facet_field_names, response = nil
+    deprecated_method(:has_facet_values?)
     unless response
       Deprecation.warn(self, 'Calling has_facet_values? without passing the ' \
         'second argument (response) is deprecated and will be removed in Blacklight ' \
@@ -18,7 +20,9 @@ module Blacklight::FacetsHelperBehavior
       response = @response
     end
     Deprecation.silence(Blacklight::FacetsHelperBehavior) do
-      facets_from_request(fields, response).any? { |display_facet| should_render_facet?(display_facet) }
+      Deprecation.silence(Blacklight::Facet) do
+        facets_from_request(fields, response).any? { |display_facet| should_render_facet?(display_facet) }
+      end
     end
   end
 
@@ -26,13 +30,16 @@ module Blacklight::FacetsHelperBehavior
   # Render a collection of facet fields.
   # @see #render_facet_limit
   #
+  # @deprecated
   # @param [Array<String>] fields
   # @param [Hash] options
-  # @options options [Blacklight::Solr::Response] :response the Solr response object
+  # @option options [Blacklight::Solr::Response] :response the Solr response object
   # @return String
   def render_facet_partials fields = nil, options = {}
+    deprecated_method(:render_facet_partials)
+
     unless fields
-      Deprecation.warn(self, 'Calling render_facet_partials without passing the ' \
+      Deprecation.warn(self.class, 'Calling render_facet_partials without passing the ' \
         'first argument (fields) is deprecated and will be removed in Blacklight ' \
         '8.0.0')
       fields = facet_field_names
@@ -40,14 +47,18 @@ module Blacklight::FacetsHelperBehavior
 
     response = options.delete(:response)
     unless response
-      Deprecation.warn(self, 'Calling render_facet_partials without passing the ' \
+      Deprecation.warn(self.class, 'Calling render_facet_partials without passing the ' \
         'response keyword is deprecated and will be removed in Blacklight ' \
         '8.0.0')
       response = @response
     end
-    safe_join(facets_from_request(fields, response).map do |display_facet|
-      render_facet_limit(display_facet, options)
-    end.compact, "\n")
+    Deprecation.silence(Blacklight::FacetsHelperBehavior) do
+      Deprecation.silence(Blacklight::Facet) do
+        safe_join(facets_from_request(fields, response).map do |display_facet|
+          render_facet_limit(display_facet, options)
+        end.compact, "\n")
+      end
+    end
   end
 
   ##
@@ -102,6 +113,7 @@ module Blacklight::FacetsHelperBehavior
   # Renders the list of values
   # removes any elements where render_facet_item returns a nil value. This enables an application
   # to filter undesireable facet items so they don't appear in the UI
+  # @deprecated
   def render_facet_limit_list(paginator, facet_field, wrapping_element = :li)
     facet_config ||= facet_configuration_for_field(facet_field)
 
@@ -115,6 +127,7 @@ module Blacklight::FacetsHelperBehavior
 
   ##
   # Renders a single facet item
+  # @deprecated
   def render_facet_item(facet_field, item)
     deprecated_method(:render_facet_item)
     if facet_in_params?(facet_field, item.value)
@@ -129,6 +142,7 @@ module Blacklight::FacetsHelperBehavior
   #
   # By default, only render facets with items.
   #
+  # @deprecated
   # @param [Blacklight::Solr::Response::Facets::FacetField] display_facet
   # @param [Blacklight::Configuration::FacetField] facet_config
   # @return [Boolean]
@@ -147,6 +161,7 @@ module Blacklight::FacetsHelperBehavior
   #   - if the facet is configured to collapse (the default), collapse
   #   - if the facet is configured not to collapse, don't collapse
   #
+  # @deprecated
   # @param [Blacklight::Configuration::FacetField] facet_field
   # @return [Boolean]
   def should_collapse_facet? facet_field
@@ -172,7 +187,7 @@ module Blacklight::FacetsHelperBehavior
   deprecation_deprecate :facet_partial_name
 
   def facet_field_presenter(facet_config, display_facet)
-    facet_config.presenter.new(facet_config, display_facet, self)
+    (facet_config.presenter || Blacklight::FacetFieldPresenter).new(facet_config, display_facet, self)
   end
 
   ##
@@ -193,6 +208,8 @@ module Blacklight::FacetsHelperBehavior
 
   ##
   # Where should this facet link to?
+  #
+  # @deprecated
   # @param [Blacklight::Solr::Response::Facets::FacetField] facet_field
   # @param [String] item
   # @return [String]
@@ -204,6 +221,8 @@ module Blacklight::FacetsHelperBehavior
 
   ##
   # Standard display of a SELECTED facet value (e.g. without a link and with a remove button)
+  #
+  # @deprecated
   # @see #render_facet_value
   # @param [Blacklight::Solr::Response::Facets::FacetField] facet_field
   # @param [String] item
@@ -217,6 +236,7 @@ module Blacklight::FacetsHelperBehavior
   # Renders a count value for facet limits. Can be over-ridden locally
   # to change style. And can be called by plugins to get consistent display.
   #
+  # @deprecated
   # @param [Integer] num number of facet results
   # @param [Hash] options
   # @option options [Array<String>]  an array of classes to add to count span.
@@ -224,7 +244,7 @@ module Blacklight::FacetsHelperBehavior
   def render_facet_count(num, options = {})
     deprecated_method(:render_facet_count)
     classes = (options[:classes] || []) << "facet-count"
-    content_tag("span", t('blacklight.search.facets.count', number: number_with_delimiter(num)), class: classes)
+    tag.span(t('blacklight.search.facets.count', number: number_with_delimiter(num)), class: classes)
   end
 
   ##
@@ -234,7 +254,10 @@ module Blacklight::FacetsHelperBehavior
   # @return [Boolean]
   def facet_field_in_params? field
     config = facet_configuration_for_field(field)
-    search_state.has_facet? config
+
+    Deprecation.silence(Blacklight::SearchState) do
+      search_state.has_facet? config
+    end
   end
   # Left undeprecated for the sake of temporary backwards compatibility
   # deprecation_deprecate :facet_field_in_params?
@@ -243,17 +266,22 @@ module Blacklight::FacetsHelperBehavior
   # Check if the query parameters have the given facet field with the
   # given value.
   #
+  # @deprecated
   # @param [String] field
   # @param [String] item facet value
   # @return [Boolean]
   def facet_in_params?(field, item)
     config = facet_configuration_for_field(field)
-    search_state.has_facet? config, value: facet_value_for_facet_item(item)
+
+    Deprecation.silence(Blacklight::SearchState) do
+      search_state.has_facet? config, value: facet_value_for_facet_item(item)
+    end
   end
   deprecation_deprecate :facet_in_params?
 
   ##
   # Get the values of the facet set in the blacklight query string
+  # @deprecated
   def facet_params field
     config = facet_configuration_for_field(field)
 
@@ -274,6 +302,7 @@ module Blacklight::FacetsHelperBehavior
     facet_item_presenter(facet_config, item, field).label
   end
 
+  # @deprecated
   def facet_field_id facet_field
     "facet-#{facet_field.key.parameterize}"
   end

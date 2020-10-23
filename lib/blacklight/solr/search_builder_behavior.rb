@@ -43,7 +43,7 @@ module Blacklight::Solr
       solr_parameters[:qt] = blacklight_params[:qt] if blacklight_params[:qt]
 
       if search_field
-        solr_parameters[:qt] = search_field.qt
+        solr_parameters[:qt] = search_field.qt if search_field.qt
         solr_parameters.merge!(search_field.solr_parameters) if search_field.solr_parameters
       end
 
@@ -52,32 +52,14 @@ module Blacklight::Solr
       # solr LocalParams in config, using solr LocalParams syntax.
       # http://wiki.apache.org/solr/LocalParams
       ##
-      if search_field && search_field.solr_local_parameters.present?
-        local_params = search_field.solr_local_parameters.map do |key, val|
-          key.to_s + "=" + solr_param_quote(val, quote: "'")
-        end.join(" ")
-        solr_parameters[:q] = "{!#{local_params}}#{blacklight_params[:q]}"
-
-        ##
-        # Set Solr spellcheck.q to be original user-entered query, without
-        # our local params, otherwise it'll try and spellcheck the local
-        # params!
-        solr_parameters["spellcheck.q"] ||= blacklight_params[:q]
-      elsif blacklight_params[:q].is_a? Hash
-        q = blacklight_params[:q]
-        solr_parameters[:q] = if q.values.any?(&:blank?)
-                                # if any field parameters are empty, exclude _all_ results
-                                "{!lucene}NOT *:*"
-                              else
-                                "{!lucene}" + q.map do |field, values|
-                                  "#{field}:(#{Array(values).map { |x| solr_param_quote(x) }.join(' OR ')})"
-                                end.join(" AND ")
-                              end
-
-        solr_parameters[:defType] = 'lucene'
-        solr_parameters[:spellcheck] = 'false'
+      if search_field&.query_builder.present?
+        add_search_field_query_builder_params(solr_parameters)
+      elsif search_field&.solr_local_parameters.present?
+        add_search_field_with_local_parameters(solr_parameters)
+      elsif search_state.query_param.is_a? Hash
+        add_multifield_search_query(solr_parameters)
       elsif blacklight_params[:q]
-        solr_parameters[:q] = blacklight_params[:q]
+        solr_parameters[:q] = search_state.query_param
       end
     end
 
@@ -90,13 +72,17 @@ module Blacklight::Solr
         solr_parameters[:fq] = [solr_parameters[:fq]]
       end
 
-      # :fq, map from :f.
-      if blacklight_params[:f]
-        f_request_params = blacklight_params[:f]
+      search_state.filters.each do |filter|
+        if filter.config.filter_query_builder
+          filter_query, subqueries = filter.config.filter_query_builder.call(self, filter, solr_parameters)
 
-        f_request_params.each_pair do |facet_field, value_list|
-          Array(value_list).reject(&:blank?).each do |value|
-            solr_parameters.append_filter_query facet_value_to_fq_string(facet_field, value)
+          solr_parameters.append_filter_query(filter_query)
+          solr_parameters.merge!(subqueries) if subqueries
+        else
+          filter.values.reject(&:blank?).each do |value|
+            filter_query, subqueries = facet_value_to_fq_string(filter.config.key, value)
+            solr_parameters.append_filter_query(filter_query)
+            solr_parameters.merge!(subqueries) if subqueries
           end
         end
       end
@@ -171,9 +157,7 @@ module Blacklight::Solr
 
     # Remove the group parameter if we've faceted on the group field (e.g. for the full results for a group)
     def add_group_config_to_solr solr_parameters
-      if blacklight_params[:f] && blacklight_params[:f][grouped_key_for_results]
-        solr_parameters[:group] = false
-      end
+      solr_parameters[:group] = false if search_state.filter(grouped_key_for_results).any?
     end
 
     def add_facet_paging_to_solr(solr_params)
@@ -191,22 +175,17 @@ module Blacklight::Solr
                 facet_config.fetch(:more_limit, blacklight_config.default_more_limit)
               end
 
-      page = blacklight_params.fetch(request_keys[:page], 1).to_i
+      page = search_state.facet_page
+      sort = search_state.facet_sort
+      prefix = search_state.facet_prefix
       offset = (page - 1) * limit
-
-      sort = blacklight_params[request_keys[:sort]]
-      prefix = blacklight_params[request_keys[:prefix]]
 
       # Need to set as f.facet_field.facet.* to make sure we
       # override any field-specific default in the solr request handler.
       solr_params[:"f.#{facet_config.field}.facet.limit"] = limit + 1
       solr_params[:"f.#{facet_config.field}.facet.offset"] = offset
-      if blacklight_params[request_keys[:sort]]
-        solr_params[:"f.#{facet_config.field}.facet.sort"] = sort
-      end
-      if blacklight_params[request_keys[:prefix]]
-        solr_params[:"f.#{facet_config.field}.facet.prefix"] = prefix
-      end
+      solr_params[:"f.#{facet_config.field}.facet.sort"] = sort if sort
+      solr_params[:"f.#{facet_config.field}.facet.prefix"] = prefix if prefix
       solr_params[:rows] = 0
     end
 
@@ -314,8 +293,45 @@ module Blacklight::Solr
       end
     end
 
-    def request_keys
-      blacklight_config.facet_paginator_class.request_keys
+    def search_state
+      return super if defined?(super)
+
+      @search_state ||= Blacklight::SearchState.new(blacklight_params, blacklight_config)
+    end
+
+    def add_search_field_query_builder_params(solr_parameters)
+      q, additional_parameters = search_field.query_builder.call(self, search_field, solr_parameters)
+
+      solr_parameters[:q] = q
+      solr_parameters.merge!(additional_parameters) if additional_parameters
+    end
+
+    def add_search_field_with_local_parameters(solr_parameters)
+      local_params = search_field.solr_local_parameters.map do |key, val|
+        key.to_s + "=" + solr_param_quote(val, quote: "'")
+      end.join(" ")
+      solr_parameters[:q] = "{!#{local_params}}#{search_state.query_param}"
+
+      ##
+      # Set Solr spellcheck.q to be original user-entered query, without
+      # our local params, otherwise it'll try and spellcheck the local
+      # params!
+      solr_parameters["spellcheck.q"] ||= search_state.query_param
+    end
+
+    def add_multifield_search_query(solr_parameters)
+      q = search_state.query_param
+      solr_parameters[:q] = if q.values.any?(&:blank?)
+                              # if any field parameters are empty, exclude _all_ results
+                              "{!lucene}NOT *:*"
+                            else
+                              "{!lucene}" + q.map do |field, values|
+                                "#{field}:(#{Array(values).map { |x| solr_param_quote(x) }.join(' OR ')})"
+                              end.join(" AND ")
+                            end
+
+      solr_parameters[:defType] = 'lucene'
+      solr_parameters[:spellcheck] = 'false'
     end
   end
 end

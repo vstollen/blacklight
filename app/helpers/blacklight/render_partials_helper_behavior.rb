@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 module Blacklight::RenderPartialsHelperBehavior
+  extend Deprecation
+
   ##
   # Render the document index view
   #
@@ -16,6 +18,7 @@ module Blacklight::RenderPartialsHelperBehavior
   def render_grouped_document_index
     render 'catalog/group'
   end
+  deprecation_deprecate render_grouped_document_index: 'Removed without replacement'
 
   ##
   # Return the list of partials for a given solr document
@@ -54,7 +57,7 @@ module Blacklight::RenderPartialsHelperBehavior
   # @param [String] base_name base name for the partial
   # @param [Hash] locals local variables to pass through to the partials
   def render_document_partial(doc, base_name, locals = {})
-    format = document_partial_name(doc, base_name)
+    format = Deprecation.silence(Blacklight::RenderPartialsHelperBehavior) { document_partial_name(doc, base_name) }
 
     view_type = document_index_view_type
     template = cached_view ['show', view_type, base_name, format].join('_') do
@@ -111,14 +114,16 @@ module Blacklight::RenderPartialsHelperBehavior
   ##
   # Return a normalized partial name for rendering a single document
   #
+  # @private
   # @param [SolrDocument] document
   # @param [Symbol] base_name base name for the partial
   # @return [String]
   def document_partial_name(document, base_name = nil)
-    display_type = show_presenter(document).display_type(base_name, default: 'default')
+    display_type = document_presenter(document).display_type(base_name, default: 'default')
 
     type_field_to_partial_name(document, display_type)
   end
+  deprecation_deprecate document_partial_name: 'Moving to a private method'
 
   private
 
@@ -127,7 +132,7 @@ module Blacklight::RenderPartialsHelperBehavior
   # this method can be overridden in order to transform the value
   #   (e.g. 'PdfBook' => 'pdf_book')
   #
-  # @param [SolrDocument] document
+  # @param [SolrDocument] _document
   # @param [String, Array] display_type a value suggestive of a partial
   # @return [String] the name of the partial to render
   # @example

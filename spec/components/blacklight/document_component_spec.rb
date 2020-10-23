@@ -42,11 +42,13 @@ RSpec.describe Blacklight::DocumentComponent, type: :component do
 
   it 'has some defined content areas' do
     component.with(:title, 'Title')
+    component.with(:embed, 'Embed')
     component.with(:metadata, 'Metadata')
     component.with(:thumbnail, 'Thumbnail')
     component.with(:actions, 'Actions')
 
     expect(rendered).to have_content 'Title'
+    expect(rendered).to have_content 'Embed'
     expect(rendered).to have_content 'Metadata'
     expect(rendered).to have_content 'Thumbnail'
     expect(rendered).to have_content 'Actions'
@@ -87,6 +89,14 @@ RSpec.describe Blacklight::DocumentComponent, type: :component do
       expect(rendered).to have_selector 'header', text: '5. Title'
     end
 
+    context 'with a document rendered as part of a collection' do
+      let(:attr) { { document_counter: 10, counter_offset: 100 } }
+
+      it 'renders a counter with the title' do
+        expect(rendered).to have_selector 'header', text: '111. Title'
+      end
+    end
+
     it 'renders actions' do
       expect(rendered).to have_selector '.index-document-functions'
     end
@@ -117,6 +127,19 @@ RSpec.describe Blacklight::DocumentComponent, type: :component do
       expect(rendered).to have_selector 'dl.document-metadata'
       expect(rendered).to have_selector 'dt', text: 'ISBN:'
       expect(rendered).to have_selector 'dd', text: 'Value'
+    end
+
+    it 'renders an embed' do
+      stub_const('StubComponent', Class.new(ViewComponent::Base) do
+        def initialize(**); end
+
+        def call
+          'embed'
+        end
+      end)
+
+      blacklight_config.show.embed_component = StubComponent
+      expect(rendered).to have_content 'embed'
     end
   end
 

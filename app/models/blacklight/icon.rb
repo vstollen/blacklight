@@ -3,9 +3,9 @@
 module Blacklight
   class Icon
     attr_reader :icon_name, :aria_hidden, :label, :role, :additional_options
+
     ##
     # @param [String, Symbol] icon_name
-    # @param [Hash] options
     # @param [String] classes additional classes separated by a string
     # @param [Boolean] aria_hidden include aria_hidden attribute
     # @param [Boolean] label include <title> and aria-label as part of svg

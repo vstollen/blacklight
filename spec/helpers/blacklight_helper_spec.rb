@@ -48,10 +48,12 @@ RSpec.describe BlacklightHelper do
       helper.content_for(:page_title) { "xyz" }
       expect(helper.render_page_title).to eq "xyz"
     end
+
     it "looks in the @page_title ivar" do
       assign(:page_title, "xyz")
       expect(helper.render_page_title).to eq "xyz"
     end
+
     it "defaults to the application name" do
       expect(helper.render_page_title).to eq helper.application_name
     end
@@ -194,12 +196,14 @@ RSpec.describe BlacklightHelper do
       field_config = double(field: 'asdf')
       expect(helper.document_has_value?(doc, field_config)).to eq true
     end
+
     it "ifs the document has a highlight field value" do
       allow(doc).to receive(:has?).with('asdf').and_return(false)
       allow(doc).to receive(:has_highlight_field?).with('asdf').and_return(true)
       field_config = double(field: 'asdf', highlight: true)
       expect(helper.document_has_value?(doc, field_config)).to eq true
     end
+
     it "ifs the field has a model accessor" do
       allow(doc).to receive(:has?).with('asdf').and_return(false)
       allow(doc).to receive(:has_highlight_field?).with('asdf').and_return(false)
@@ -209,6 +213,8 @@ RSpec.describe BlacklightHelper do
   end
 
   describe '#render_index_field_label' do
+    around { |test| Deprecation.silence(Blacklight::BlacklightHelperBehavior) { test.call } }
+
     let(:doc) { SolrDocument.new({}) }
 
     before do
@@ -242,6 +248,8 @@ RSpec.describe BlacklightHelper do
   end
 
   describe "should_show_spellcheck_suggestions?" do
+    around { |test| Deprecation.silence(Blacklight::BlacklightHelperBehavior) { test.call } }
+
     before do
       allow(helper).to receive_messages spell_check_max: 5
     end
@@ -250,14 +258,17 @@ RSpec.describe BlacklightHelper do
       response = double(total: 10)
       expect(helper.should_show_spellcheck_suggestions?(response)).to be false
     end
+
     it "only shows suggestions if there are very few results" do
       response = double(total: 4, spelling: double(words: [1]))
       expect(helper.should_show_spellcheck_suggestions?(response)).to be true
     end
+
     it "shows suggestions only if there are spelling suggestions available" do
       response = double(total: 4, spelling: double(words: []))
       expect(helper.should_show_spellcheck_suggestions?(response)).to be false
     end
+
     it "does not show suggestions if spelling is not available" do
       response = double(total: 4, spelling: nil)
       expect(helper.should_show_spellcheck_suggestions?(response)).to be false
@@ -270,12 +281,15 @@ RSpec.describe BlacklightHelper do
     it "has a search rel" do
       expect(subject).to have_selector "link[rel='search']", visible: false
     end
+
     it "has the correct mime type" do
       expect(subject).to have_selector "link[type='application/opensearchdescription+xml']", visible: false
     end
+
     it "has a title attribute" do
       expect(subject).to have_selector "link[title='title']", visible: false
     end
+
     it "has an href attribute" do
       expect(subject).to have_selector "link[href='href']", visible: false
     end
@@ -356,6 +370,8 @@ RSpec.describe BlacklightHelper do
     let(:presenter_class) { double }
     let(:blacklight_config) { Blacklight::Configuration.new }
 
+    around { |test| Deprecation.silence(Blacklight::BlacklightHelperBehavior) { test.call } }
+
     before do
       allow(helper).to receive(:blacklight_config).and_return(blacklight_config)
     end
@@ -384,6 +400,8 @@ RSpec.describe BlacklightHelper do
   end
 
   describe "#render_document_heading" do
+    around { |test| Deprecation.silence(Blacklight::BlacklightHelperBehavior) { test.call } }
+
     let(:document) { double }
 
     before do
@@ -410,6 +428,8 @@ RSpec.describe BlacklightHelper do
   end
 
   describe "#presenter" do
+    around { |test| Deprecation.silence(Blacklight::BlacklightHelperBehavior) { test.call } }
+
     let(:document) { double }
 
     before do

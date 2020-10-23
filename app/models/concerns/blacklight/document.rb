@@ -105,12 +105,13 @@ module Blacklight::Document
   # extendability architecture
   module ClassMethods
     attr_writer :unique_key
+
     def unique_key
       @unique_key ||= 'id'
     end
 
     # Define an attribute reader on a document model
-    # @Example
+    # @example
     #   class SolrDocument
     #     include Blacklight::Solr::Document
     #     attribute :title, Blacklight::Types::String, 'title_tesim'

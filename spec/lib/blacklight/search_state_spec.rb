@@ -3,6 +3,8 @@
 RSpec.describe Blacklight::SearchState do
   subject(:search_state) { described_class.new(params, blacklight_config, controller) }
 
+  around { |test| Deprecation.silence(described_class) { test.call } }
+
   let(:blacklight_config) do
     Blacklight::Configuration.new.configure do |config|
       config.index.title_field = 'title_tsim'
@@ -52,6 +54,30 @@ RSpec.describe Blacklight::SearchState do
 
       it 'normalizes the facets to the expected format' do
         expect(search_state.to_h).to include f: { field: %w[first second] }
+      end
+    end
+
+    context 'deleting item from to_h' do
+      let(:params) { { q: 'foo', q_1: 'bar' } }
+
+      it 'does not mutate search_state to mutate search_state.to_h' do
+        params = search_state.to_h
+        params.delete(:q_1)
+
+        expect(search_state.to_h).to eq('q' => 'foo', 'q_1' => 'bar')
+        expect(params).to eq('q' => 'foo')
+      end
+    end
+
+    context 'deleting deep item from to_h' do
+      let(:params) { { foo: { bar: [] } } }
+
+      it 'does not mutate search_state to deep mutate search_state.to_h' do
+        params = search_state.to_h
+        params[:foo][:bar] << 'buzz'
+
+        expect(search_state.to_h).to eq('foo' => { 'bar' => [] })
+        expect(params).to eq('foo' => { 'bar' => ['buzz'] })
       end
     end
   end
@@ -218,9 +244,9 @@ RSpec.describe Blacklight::SearchState do
       end
 
       it "uses the facet's key in the url" do
-        allow(search_state).to receive(:facet_configuration_for_field).with('some_field').and_return(double(single: true, field: "a_solr_field", key: "some_key"))
+        blacklight_config.add_facet_field 'some_key', single: true, field: "a_solr_field"
 
-        result_params = search_state.add_facet_params('some_field', 'my_value')
+        result_params = search_state.add_facet_params('some_key', 'my_value')
 
         expect(result_params[:f]['some_key']).to have(1).item
         expect(result_params[:f]['some_key'].first).to eq 'my_value'
@@ -260,7 +286,7 @@ RSpec.describe Blacklight::SearchState do
       let(:params) { parameter_class.new f: { 'single_value_facet_field' => 'other_value' } }
 
       it "replaces facets configured as single" do
-        allow(search_state).to receive(:facet_configuration_for_field).with('single_value_facet_field').and_return(double(single: true, key: "single_value_facet_field"))
+        blacklight_config.add_facet_field 'single_value_facet_field', single: true
         result_params = search_state.add_facet_params('single_value_facet_field', 'my_value')
 
         expect(result_params[:f]['single_value_facet_field']).to have(1).item
@@ -389,6 +415,133 @@ RSpec.describe Blacklight::SearchState do
       new_state = search_state.reset('a' => 1)
 
       expect(new_state.to_hash).to eq('a' => 1)
+    end
+  end
+
+  describe '#page' do
+    context 'with a page' do
+      let(:params) { { 'page' => '3' } }
+
+      it 'is mapped from page' do
+        expect(search_state.page).to eq 3
+      end
+    end
+
+    context 'without a page' do
+      let(:params) { {} }
+
+      it 'is defaults to page 1' do
+        expect(search_state.page).to eq 1
+      end
+
+      context 'with negative numbers or other bad data' do
+        let(:params) { { 'page' => '-3' } }
+
+        it 'is defaults to page 1' do
+          expect(search_state.page).to eq 1
+        end
+      end
+    end
+  end
+
+  describe '#per_page' do
+    context 'with rows' do
+      let(:params) { { rows: '30' } }
+
+      it 'maps from rows' do
+        expect(search_state.per_page).to eq 30
+      end
+    end
+
+    context 'with per_page' do
+      let(:params) { { per_page: '14' } }
+
+      it 'maps from rows' do
+        expect(search_state.per_page).to eq 14
+      end
+    end
+
+    context 'it defaults to the configured value' do
+      let(:params) { {} }
+
+      it 'maps from rows' do
+        expect(search_state.per_page).to eq 10
+      end
+    end
+  end
+
+  describe '#sort_field' do
+    let(:params) { { 'sort' => 'author' } }
+
+    before do
+      blacklight_config.add_sort_field 'relevancy', label: 'relevance'
+      blacklight_config.add_sort_field 'author', label: 'asd'
+    end
+
+    it 'returns the current search field' do
+      expect(search_state.sort_field).to have_attributes(key: 'author')
+    end
+
+    context 'without a search field' do
+      let(:params) { {} }
+
+      it 'returns the current search field' do
+        expect(search_state.sort_field).to have_attributes(key: 'relevancy')
+      end
+    end
+  end
+
+  describe '#search_field' do
+    let(:params) { { 'search_field' => 'author' } }
+
+    before do
+      blacklight_config.add_search_field 'author', label: 'asd'
+    end
+
+    it 'returns the current search field' do
+      expect(search_state.search_field).to have_attributes(key: 'author')
+    end
+  end
+
+  describe '#facet_page' do
+    context 'with a page' do
+      let(:params) { { 'facet.page' => '3' } }
+
+      it 'is mapped from facet.page' do
+        expect(search_state.facet_page).to eq 3
+      end
+    end
+
+    context 'without a page' do
+      let(:params) { {} }
+
+      it 'is defaults to page 1' do
+        expect(search_state.facet_page).to eq 1
+      end
+    end
+
+    context 'with negative numbers or other bad data' do
+      let(:params) { { 'facet.page' => '-3' } }
+
+      it 'is defaults to page 1' do
+        expect(search_state.facet_page).to eq 1
+      end
+    end
+  end
+
+  describe '#facet_sort' do
+    let(:params) { { 'facet.sort' => 'index' } }
+
+    it 'is mapped from facet.sort' do
+      expect(search_state.facet_sort).to eq 'index'
+    end
+  end
+
+  describe '#facet_prefix' do
+    let(:params) { { 'facet.prefix' => 'A' } }
+
+    it 'is mapped from facet.prefix' do
+      expect(search_state.facet_prefix).to eq 'A'
     end
   end
 end

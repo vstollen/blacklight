@@ -93,6 +93,7 @@ RSpec.describe CatalogHelper do
       expect(html).to eq "<strong>41</strong> - <strong>47</strong> of <strong>47</strong>"
       expect(html).to be_html_safe
     end
+
     it "works with rows the same as per_page" do
       @response = mock_response total: 47, rows: 20, current_page: 2
 
@@ -165,7 +166,7 @@ RSpec.describe CatalogHelper do
 
   describe "should_autofocus_on_search_box?" do
     before do
-      expect(Deprecation).to receive(:warn)
+      allow(Deprecation).to receive(:warn)
     end
 
     it "is focused if we're on a catalog-like index page without query or facet parameters" do
@@ -191,7 +192,7 @@ RSpec.describe CatalogHelper do
 
   describe "has_thumbnail?" do
     before do
-      expect(Deprecation).to receive(:warn)
+      allow(Deprecation).to receive(:warn)
     end
 
     let(:document) { SolrDocument.new(data) }
@@ -230,7 +231,7 @@ RSpec.describe CatalogHelper do
     let(:thumbnail_presenter) { instance_double(Blacklight::ThumbnailPresenter) }
 
     before do
-      expect(Deprecation).to receive(:warn)
+      allow(Deprecation).to receive(:warn)
       allow(helper).to receive(:index_presenter).with(document).and_return(index_presenter)
     end
 
@@ -249,7 +250,7 @@ RSpec.describe CatalogHelper do
 
   describe "thumbnail_url" do
     before do
-      expect(Deprecation).to receive(:warn)
+      allow(Deprecation).to receive(:warn)
     end
 
     it "pulls the configured thumbnail field out of the document" do

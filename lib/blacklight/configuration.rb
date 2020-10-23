@@ -66,12 +66,12 @@ module Blacklight
             # document presenter class used by helpers and views
             document_presenter_class: nil,
             # component class used to render a document; defaults to Blacklight::DocumentComponent,
-            #   but can be set explicitly to avoid any legacy behavior   
+            #   but can be set explicitly to avoid any legacy behavior
             document_component: nil,
             # solr field to use to render a document title
             title_field: nil,
             # solr field to use to render format-specific partials
-            display_type_field: 'format',
+            display_type_field: nil,
             # partials to render for each document(see #render_document_partials)
             partials: [:index_header, :thumbnail, :index],
             document_actions: NestedOpenStructWithHashAccess.new(ToolConfig),
@@ -86,7 +86,7 @@ module Blacklight
             # document presenter class used by helpers and views
             document_presenter_class: nil,
             document_component: nil,
-            display_type_field: 'format',
+            display_type_field: nil,
             # Default route parameters for 'show' requests.
             # Set this to a hash with additional arguments to merge into the route,
             # or set `controller: :current` to route to the current controller.
@@ -100,7 +100,8 @@ module Blacklight
                                                    list: {},
                                                    atom: {
                                                      if: false, # by default, atom should not show up as an alternative view
-                                                     partials: [:document]
+                                                     partials: [:document],
+                                                     summary_partials: [:index]
                                                    },
                                                    rss: {
                                                      if: false, # by default, rss should not show up as an alternative view
@@ -255,6 +256,11 @@ module Blacklight
       facet_fields.select { |_facet, opts| group == opts[:group] }.values.map(&:field)
     end
 
+    # @return [Array<String>] a list of facet groups
+    def facet_group_names
+      facet_fields.map { |_facet, opts| opts[:group] }.uniq
+    end
+
     # Add any configured facet fields to the default solr parameters hash
     # @overload add_facet_fields_to_solr_request!
     #    add all facet fields to the solr request
@@ -359,7 +365,7 @@ module Blacklight
     def index_fields_for(document_or_display_types)
       display_types = if document_or_display_types.is_a? Blacklight::Document
                         Deprecation.warn self, "Calling index_fields_for with a #{document_or_display_types.class} is deprecated and will be removed in Blacklight 8. Pass the display type instead."
-                        document_or_display_types[index.display_type_field]
+                        document_or_display_types[index.display_type_field || 'format']
                       else
                         document_or_display_types
                       end
@@ -379,7 +385,7 @@ module Blacklight
     def show_fields_for(document_or_display_types)
       display_types = if document_or_display_types.is_a? Blacklight::Document
                         Deprecation.warn self, "Calling show_fields_for with a #{document_or_display_types.class} is deprecated and will be removed in Blacklight 8. Pass the display type instead."
-                        document_or_display_types[show.display_type_field]
+                        document_or_display_types[show.display_type_field || 'format']
                       else
                         document_or_display_types
                       end
@@ -397,7 +403,8 @@ module Blacklight
 
     def add_action(config_hash, name, opts)
       config = Blacklight::Configuration::ToolConfig.new opts
-      config.name = name
+      config.name ||= name
+      config.key = name
       yield(config) if block_given?
       config_hash[name] = config
     end

@@ -14,6 +14,10 @@ module Blacklight
       @view_config = view_config
     end
 
+    def render(image_options = {})
+      thumbnail_value(image_options)
+    end
+
     ##
     # Does the document have a thumbnail to render?
     #
@@ -72,7 +76,7 @@ module Blacklight
     end
 
     def retrieve_values(field_config)
-      FieldRetriever.new(document, field_config).fetch
+      FieldRetriever.new(document, field_config, view_context).fetch
     end
 
     def field_config(field)

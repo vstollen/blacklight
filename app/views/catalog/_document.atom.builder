@@ -1,17 +1,20 @@
 # frozen_string_literal: true
 
+presenter = document_presenter(document)
 xml.entry do
-  xml.title index_presenter(document).heading
+  xml.title presenter.heading
 
   # updated is required, for now we'll just set it to now, sorry
   xml.updated Time.current.iso8601
 
-  xml.link    "rel" => "alternate", "type" => "text/html", "href" => polymorphic_url(url_for_document(document))
-  # add other doc-specific formats, atom only lets us have one per
-  # content type, so the first one in the list wins.
-  xml << show_presenter(document).link_rel_alternates(unique: true)
+  Deprecation.silence(Blacklight::UrlHelperBehavior) do
+    xml.link "rel" => "alternate", "type" => "text/html", "href" => polymorphic_url(url_for_document(document))
+    # add other doc-specific formats, atom only lets us have one per
+    # content type, so the first one in the list wins.
+    xml << presenter.link_rel_alternates(unique: true)
 
-  xml.id polymorphic_url(url_for_document(document))
+    xml.id polymorphic_url(url_for_document(document))
+  end
 
   if document.to_semantic_values.key? :author
     xml.author { xml.name(document.to_semantic_values[:author].first) }
@@ -19,9 +22,9 @@ xml.entry do
 
   with_format(:html) do
     xml.summary "type" => "html" do
-      xml.text! render_document_partial(document,
-      :index,
-      document_counter: document_counter)
+      xml.text! render_document_partials(document,
+                                         blacklight_config.view_config(:atom).summary_partials,
+                                         document_counter: document_counter)
     end
   end
 

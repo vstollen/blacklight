@@ -24,6 +24,7 @@ module Blacklight
                 end
 
       @except_operations = options[:except_operations] || []
+      @except_operations += field_config.except_operations || []
       # Implicitly prevent helper methods from drawing when drawing the label for the document
       @except_operations += [Rendering::HelperMethod] if options.key? :value
     end
@@ -31,21 +32,24 @@ module Blacklight
     attr_reader :view_context, :document, :field_config, :except_operations, :options
     delegate :key, to: :field_config
 
+    # @return [String]
     def render
       Rendering::Pipeline.new(values, field_config, document, view_context, pipeline_steps, options).render
     end
 
+    # @return [Enumerable]
     def values
       @values ||= retrieve_values
     end
 
-    def label(context = 'index', **options)
-      field_config.display_label(context, count: retrieve_values.count, **options)
+    # @param [String] context
+    # @return [String]
+    def label(context = nil, **options)
+      field_config.display_label(context || options.fetch(:context, 'index'), count: retrieve_values.count, **options)
     end
 
     ##
     # Check to see if the given field should be rendered in this context
-    # @param [Blacklight::Configuration::Field] field_config
     # @return [Boolean]
     def render_field?
       view_context.should_render_field?(field_config, document)
@@ -54,7 +58,6 @@ module Blacklight
     ##
     # Check if a document has (or, might have, in the case of accessor methods) a value for
     # the given solr field
-    # @param [Blacklight::Configuration::Field] field_config
     # @return [Boolean]
     def any?
       values.present?
@@ -63,11 +66,11 @@ module Blacklight
     private
 
     def pipeline_steps
-      (options[:steps] || Rendering::Pipeline.operations) - except_operations
+      (options[:steps] || field_config[:steps] || Rendering::Pipeline.operations) - except_operations
     end
 
     def retrieve_values
-      FieldRetriever.new(document, field_config).fetch
+      FieldRetriever.new(document, field_config, view_context).fetch
     end
   end
 end

@@ -6,6 +6,8 @@ module Blacklight::Catalog
   include Blacklight::Facet
   include Blacklight::Searchable
 
+  extend Deprecation
+
   # The following code is executed when someone includes blacklight::catalog in their
   # own controller.
   included do
@@ -67,13 +69,14 @@ module Blacklight::Catalog
     search_session['counter'] = params[:counter]
     search_session['id'] = params[:search_id]
     search_session['per_page'] = params[:per_page]
+    search_session['document_id'] = params[:document_id]
 
     if params[:redirect] && (params[:redirect].starts_with?('/') || params[:redirect] =~ URI::DEFAULT_PARSER.make_regexp)
       uri = URI.parse(params[:redirect])
       path = uri.query ? "#{uri.path}?#{uri.query}" : uri.path
-      redirect_to path, status: 303
+      redirect_to path, status: :see_other
     else
-      redirect_to({ action: :show, id: params[:id] }, status: 303)
+      redirect_to({ action: :show, id: params[:id] }, status: :see_other)
     end
   end
 
@@ -84,7 +87,9 @@ module Blacklight::Catalog
 
     @response = search_service.facet_field_response(@facet.key)
     @display_facet = @response.aggregations[@facet.field]
-    @pagination = facet_paginator(@facet, @display_facet)
+
+    @presenter = (@facet.presenter || Blacklight::FacetFieldPresenter).new(@facet, @display_facet, view_context)
+    @pagination = @presenter.paginator
     respond_to do |format|
       format.html do
         # Draw the partial for the "more" facet modal window:
@@ -131,6 +136,7 @@ module Blacklight::Catalog
     params[:q].present? || params[:f].present? || params[:search_field].present?
   end
 
+  # TODO: deprecate this constant with #facet_limit_for
   DEFAULT_FACET_LIMIT = 10
 
   # Look up facet limit for given facet_field. Will look at config, and
@@ -157,6 +163,7 @@ module Blacklight::Catalog
       facet.limit == true ? DEFAULT_FACET_LIMIT : facet.limit
     end
   end
+  deprecation_deprecate facet_limit_for: 'moving to private logic in Blacklight::FacetFieldPresenter'
 
   private
 

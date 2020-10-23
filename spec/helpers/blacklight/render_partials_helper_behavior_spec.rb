@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 RSpec.describe Blacklight::RenderPartialsHelperBehavior do
+  around { |test| Deprecation.silence(described_class) { test.call } }
+
   describe "#type_field_to_partial_name" do
     subject { helper.send(:type_field_to_partial_name, document, value) }
 
@@ -49,7 +51,7 @@ RSpec.describe Blacklight::RenderPartialsHelperBehavior do
     let(:blacklight_config) { Blacklight::Configuration.new }
 
     before do
-      allow(helper).to receive_messages(blacklight_config: blacklight_config)
+      allow(helper).to receive_messages(blacklight_config: blacklight_config, action_name: 'show')
     end
 
     context "with a solr document with empty fields" do
@@ -70,6 +72,7 @@ RSpec.describe Blacklight::RenderPartialsHelperBehavior do
       it "uses the value in the configured display type field" do
         expect(helper.document_partial_name(document)).to eq 'xyz'
       end
+
       it "uses the value in the configured display type field if the action-specific field is empty" do
         expect(helper.document_partial_name(document, :some_action)).to eq 'xyz'
       end

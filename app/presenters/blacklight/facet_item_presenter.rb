@@ -18,7 +18,13 @@ module Blacklight
     # Check if the query parameters have the given facet field with the
     # given value.
     def selected?
-      search_state.has_facet? facet_config, value: facet_value
+      Deprecation.silence(Blacklight::SearchState) do
+        search_state.has_facet? facet_config, value: facet_value
+      end
+    end
+
+    def field_label
+      facet_field_presenter.label
     end
 
     ##
@@ -56,7 +62,9 @@ module Blacklight
 
     # @private
     def remove_href(path = search_state)
-      view_context.search_action_path(path.remove_facet_params(facet_config.key, facet_item))
+      Deprecation.silence(Blacklight::SearchState) do
+        view_context.search_action_path(path.remove_facet_params(facet_config.key, facet_item))
+      end
     end
 
     # @private
@@ -76,6 +84,10 @@ module Blacklight
       else
         facet_item
       end
+    end
+
+    def facet_field_presenter
+      @facet_field_presenter ||= view_context.facet_field_presenter(facet_config, {})
     end
   end
 end
