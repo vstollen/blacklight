@@ -52,6 +52,14 @@ module Blacklight::Solr::Response::Facets
       @options[:prefix] || solr_default_prefix
     end
 
+    def type
+      @options[:type] || 'terms'
+    end
+
+    def extra_data
+      @options[:extra] || {}
+    end
+
     def index?
       sort == 'index'
     end
@@ -90,7 +98,7 @@ module Blacklight::Solr::Response::Facets
   # Get all the Solr facet data (fields, queries, pivots) as a hash keyed by
   # both the Solr field name and/or by the blacklight field name
   def aggregations
-    @aggregations ||= {}.merge(facet_field_aggregations).merge(facet_query_aggregations).merge(facet_pivot_aggregations)
+    @aggregations ||= {}.merge(facet_field_aggregations).merge(facet_query_aggregations).merge(facet_pivot_aggregations).merge(json_facet_aggregations)
   end
 
   def facet_counts
@@ -194,6 +202,12 @@ module Blacklight::Solr::Response::Facets
         Blacklight::Solr::Response::Facets::FacetItem.new(value: key, hits: hits, label: facet_field.query[key][:label])
       end
 
+      items += self['facets'].select { |k, _v| salient_facet_queries.include?(k) }.reject { |_key, data| data['count'].zero? }.map do |key, data|
+        salient_fields = facet_field.query.select { |_key, val| val[:fq] == key }
+        facet_key = ((salient_fields.keys if salient_fields.respond_to? :keys) || salient_fields.first).first
+        Blacklight::Solr::Response::Facets::FacetItem.new(value: facet_key, hits: data[:count], label: facet_field.query[facet_key][:label])
+      end
+
       items = items.sort_by(&:hits).reverse if facet_field.sort && facet_field.sort.to_sym == :count
 
       hash[field_name] = Blacklight::Solr::Response::Facets::FacetField.new field_name, items
@@ -226,5 +240,49 @@ module Blacklight::Solr::Response::Facets
     end
 
     Blacklight::Solr::Response::Facets::FacetItem.new(value: lst[:value], hits: lst[:count], field: lst[:field], items: items, fq: parent_fq)
+  end
+
+  def construct_json_nested_facet_fields(bucket, parent_fq = {})
+    bucket['facet'].select { |_, nested| nested['buckets'] }.map do |facet_field_name, nested|
+      nested['buckets'].map do |subbucket|
+        i = Blacklight::Solr::Response::Facets::FacetItem.new(field: facet_field_name, value: bucket['val'], hits: bucket['count'], fq: parent_fq, extra_data: bucket.except('val', 'count'))
+
+        # TODO: validate this 'missing' config works for json facets too.
+        # solr facet.missing serialization
+        if value.nil?
+          i.label = I18n.t(:"blacklight.search.fields.facet.missing.#{facet_field_name}", default: [:"blacklight.search.facets.missing"])
+          i.fq = "-#{facet_field_name}:[* TO *]"
+        end
+
+        i.nested_fields = construct_json_nested_facet_fields(subbucket, parent_fq.merge(key => subbucket['val'])) if subbucket['facet']
+
+        i
+      end
+    end
+  end
+
+  def json_facet_aggregations
+    self['facets'].each_with_object({}) do |(facet_field_name, data), hash|
+      items = (data['buckets'] || []).map do |bucket|
+        i = Blacklight::Solr::Response::Facets::FacetItem.new(value: bucket['val'], hits: bucket['count'], extra_data: bucket.except('val', 'count'))
+
+        # TODO: validate this 'missing' config works for json facets too.
+        # solr facet.missing serialization
+        if value.nil?
+          i.label = I18n.t(:"blacklight.search.fields.facet.missing.#{facet_field_name}", default: [:"blacklight.search.facets.missing"])
+          i.fq = "-#{facet_field_name}:[* TO *]"
+        end
+
+        i.nested_fields = construct_json_nested_facet_fields(bucket, facet_field_name => bucket['val']) if bucket['facet']
+
+        i
+      end
+      # TODO: extra facet data
+
+      options = facet_field_aggregation_options(facet_field_name).merge(extra_data: data.except('buckets'))
+      hash[facet_field_name] = FacetField.new(facet_field_name,
+                                              items,
+                                              options)
+    end
   end
 end
